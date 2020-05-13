@@ -1,66 +1,7 @@
-from keras.models import Sequential
-from keras.layers import Dense, Reshape
-from keras.optimizers import Adam
-from keras.utils.np_utils import to_categorical
-from collections import deque
-import numpy as np
-
 from fizzbuzz import FizzBuzz
-
-class Model:
-    def __init__(self):
-        learning_rate = 0.01
-        state_size    = 15
-        action_size   = 4
-        hidden_size   = 16
-
-        self.model = Sequential()
-        self.model.add(Dense(hidden_size, activation='relu', input_dim=state_size))
-        self.model.add(Dense(action_size, activation='softmax'))
-        self.optimizer = Adam(lr=learning_rate)
-        self.model.compile(loss='mse', optimizer=self.optimizer)
-        self.model.summary()
-
-    def replay(self, memory, batch_size, gamma, target_model):
-        inputs     = np.zeros((batch_size, 15))
-        outputs    = np.zeros((batch_size, 4))
-        mini_batch = memory.sample(batch_size)
-
-        for i, (state, action, reward, next_state) in enumerate(mini_batch):
-            inputs[i:i + 1] = state
-            target          = reward
-
-            if not (next_state == np.zeros(state.shape)).all():
-                retmainQs = self.model.predict(next_state.reshape(1, 15))[0].argmax()
-                next_action = np.argmax(retmainQs)
-                target = reward + gamma * target_model.model.predict(next_state.reshape(1, 15))[0][next_action]
-
-            outputs[i] = self.model.predict(state.reshape(1, 15))
-            outputs[i][action.argmax()] = target
-
-        self.model.fit(inputs, outputs, epochs=1, verbose=0)
-
-class Memory:
-    def __init__(self):
-        self.buffer = deque()
-
-    def add(self, exp):
-        self.buffer.append(exp)
-
-    def sample(self, batch_size):
-        indice = np.random.choice(np.arange(len(self.buffer)), size=batch_size, replace=False)
-        return [self.buffer[i] for i in indice]
-
-class Agent:
-    def get_action(self, state, epoch, main_model):
-        epsilon = 0.001 + 0.9 / (1.0 + epoch)
-
-        if epsilon < np.random.uniform(0, 1):
-            action = main_model.model.predict(state.reshape(1, 15))[0].argmax()
-        else:
-            action = np.random.choice([0, 1, 2, 3])
-
-        return to_categorical(action, 4)
+from model import Model
+from memory import Memory
+from agent import Agent
 
 def evaluate(env):
     env.reset()
@@ -71,19 +12,19 @@ def evaluate(env):
         state = next_state
 
 if __name__ == '__main__':
-    N_EPOCHS = 5000
-    S_BATCH  = 4
-    GAMMA    = 0.99
+    N_EPOCHS = 5000 # 訓練回数
+    S_BATCH  = 4    # バッチサイズ
+    GAMMA    = 0.99 # 時間経過による報酬減少率
 
-    env = FizzBuzz(1, 1000)
+    env = FizzBuzz(1, 100) # 学習環境
 
     main_model   = Model()
     target_model = Model()
 
-    memory = Memory()
-    agent  = Agent()
+    memory = Memory() # メモリ
+    agent  = Agent()  # エージェント
 
-    learned_flag = False
+    learned_flag = False # 学習が終了したか否か
 
     for epoch in range(N_EPOCHS):
         if learned_flag:
@@ -91,9 +32,9 @@ if __name__ == '__main__':
 
         print('Epoch: {}'.format(epoch + 1))
 
+        # 初期状態設定
         env.reset()
-        state, reward, finished = env.random_step()
-
+        state, reward, finished = env.random_step() 
         target_model.model.set_weights(main_model.model.get_weights())
 
         while not finished:
@@ -110,5 +51,5 @@ if __name__ == '__main__':
 
             target_model.model.set_weights(main_model.model.get_weights())
 
-    env = FizzBuzz(500, 1000)
+    env = FizzBuzz(4000, 5000)
     evaluate(env)
